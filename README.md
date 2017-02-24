@@ -1,4 +1,9 @@
-# Convert PerfProStudio files to ERG mode files.
+# Convert PerfProStudio files to ERG (Wahoo Kickr) files.
+
+[![Travis CI Build Status][travis-badge]][travis-link]
+
+  [travis-link]: https://travis-ci.org/plandes/clj-perferg
+  [travis-badge]: https://travis-ci.org/plandes/clj-perferg.svg?branch=master
 
 Convert PerfProStudio files to ERG mode files, which is used for trainers like
 the WahooKickr.  I use [iMobileIntervals](http://imobileintervals.com), which
