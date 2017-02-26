@@ -2,6 +2,7 @@
 
 # application name
 APP_SCR_NAME=	pp2erg
+REL_DIST=	$(REL_ZIP)
 
 # location of the http://github.com/plandes/clj-zenbuild cloned directory
 ZBHOME ?=	../clj-zenbuild
