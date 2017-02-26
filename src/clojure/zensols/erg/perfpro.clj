@@ -119,7 +119,7 @@
   [ftp out-file power-sets ppdata]
   (let [ftp 244
         {:keys [name type]} ppdata
-        course-data (course-data (take 10 power-sets))]
+        course-data (course-data power-sets)]
     (println "[COURSE HEADER]")
     (->> (format "MINUTES WATTS
 VERSION = 2
