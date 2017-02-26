@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
 ## [Unreleased]
+### Changed
+- Fix bug where only the first 10 intervals added to ERG.
 
 ## [0.0.1] - 2017-02-23
 ### Added
