@@ -9,11 +9,15 @@
             [zensols.actioncli.parse :refer (with-exception)]
             [zensols.util.spreadsheet :as ss]))
 
+(def ^:dynamic *default-percent-ftp-ranges*
+  "Arary of arrays regular expressions of English sentence ranges."
+  [#"(\d+)\s*(?:to|[\-])\s*(\d+)%"])
+
 (def ^:dynamic *default-percent-ftp-descriptors*
   "Arary of arrays with each a regular expression of the description, a keyword
   identifier token and a percent to use for FTP."
   [[#"^(?ui)warm\s*up$" :warmup 0.4]
-   [#"^(?ui)(easy\s*)?recovery$" :recovery 0.6]
+   [#"^(?ui)(easy\s*)?recovery?$" :recovery 0.6]
    [#"^(?ui)fast\s*spin$" :fast-spin 0.3]
    [#"(?ui)spin$" :spin 0.4]])
 
@@ -29,6 +33,13 @@
         (rename-keys {:set_fields :fields
                       :workoutType :type}))))
 
+(defn- description-to-ftp-range
+  [s]
+  (->> *default-percent-ftp-ranges*
+       (some (fn [pat]
+               (let [[_ st en] (re-find pat s)]
+                 (if st (map read-string [st en])))))))
+
 (defn- description-to-ftp-descriptor
   "Guess the percent FTP by the description.  This is given by "
   [s]
@@ -42,14 +53,18 @@
   "Convert from an FTP zone to an FTP percent.  **desc** is the description of
   the interval and num is the `start` field."
   [desc num]
-  (log/debugf "zone to percent" desc num)
-  (let [fdesc (description-to-ftp-descriptor desc)]
-    (if (and (< 0 num) (> 7 num))
-      (/ num *linear-interpolate-ftp-zone*)
-      (or (-> fdesc :percent)
-          (-> (format "Don't know how to convert percent '%s' of %d" desc num)
-              (ex-info {:desc desc :num num})
-              throw)))))
+  (log/debugf "zone to percent: %s, %d" desc num)
+  (if-let [ftp-range (description-to-ftp-range desc)]
+    (let [high (apply max ftp-range)
+          low (apply min ftp-range)]
+      (/ (+ (/ (- high low) 2.0) low) 100.0))
+    (let [fdesc (description-to-ftp-descriptor desc)]
+      (if (and (< 0 num) (> 7 num))
+        (/ num *linear-interpolate-ftp-zone*)
+        (or (-> fdesc :percent)
+            (-> (format "Don't know how to convert percent '%s' of %d" desc num)
+                (ex-info {:desc desc :num num})
+                throw))))))
 
 (defn- power-sets
   "Create power sets used in the ERG.  **ftp** is the athlete's FTP and
@@ -61,18 +76,22 @@
          (map (fn [row]
                 (zipmap fields row)))
          (map (fn [{:keys [start seconds description mode targetcad] :as m}]
-                (let [minutes (/ (double seconds) 60.0)
-                      percent (if (= mode "M")
-                                (-> (description-to-ftp-descriptor description)
-                                    :percent)
-                                (zone-to-percent description start))
-                      watts (* percent ftp)]
-                  {:description description
-                   :cadence targetcad
-                   :seconds seconds
-                   :minutes minutes
-                   :percent percent
-                   :watts watts}))))))
+                (when (> (-> description s/trim count) 0)
+                  (log/debugf "[%d, %d]: <%s>, m=%s, tc=%d"
+                              start seconds description mode targetcad)
+                  (let [minutes (/ (double seconds) 60.0)
+                        percent (if (= mode "M")
+                                  (-> (description-to-ftp-descriptor description)
+                                      :percent)
+                                  (zone-to-percent description start))
+                        watts (* percent ftp)]
+                    {:description description
+                     :cadence targetcad
+                     :seconds seconds
+                     :minutes minutes
+                     :percent percent
+                     :watts watts}))))
+         (remove nil?))))
 
 (defn- save-power-sets
   "Save an Excel file using power sets (**sets**).  **fields** are the keys
