@@ -80,6 +80,11 @@ mkdir ../clj-zenbuild && wget -O - https://api.github.com/repos/plandes/clj-zenb
 Note that you can also build a single jar file with all the dependencies with: `make uber`
 
 
+## Changelog
+
+An extensive changelog is available [here](CHANGELOG.md).
+
+
 ## License
 
 Copyright © 2017 Paul Landes
