@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
 ## [Unreleased]
+
+## [0.0.2] - 2017-03-23
+### Added
+- Add FTP range support
+
 ### Changed
 - Fix bug where only the first 10 intervals added to ERG.
 
