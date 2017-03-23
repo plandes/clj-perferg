@@ -18,5 +18,5 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Initial add converts perfpro files to ERG and XLS.
 
-[Unreleased]: https://github.com/plandes/clj-nlp-parse/compare/v0.0.2...HEAD
-[0.0.2]: https://github.com/plandes/clj-nlp-parse/compare/v0.0.1...v0.0.2
+[Unreleased]: https://github.com/plandes/clj-perferg/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/plandes/clj-perferg/compare/v0.0.1...v0.0.2
