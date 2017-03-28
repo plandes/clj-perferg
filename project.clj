@@ -17,10 +17,16 @@
   :java-source-paths ["src/java"]
   :javac-options ["-Xlint:unchecked"]
   :jar-exclusions [#".gitignore"]
+  :exclusions [org.slf4j/slf4j-log4j12
+               log4j/log4j
+               ch.qos.logback/logback-classic]
   :dependencies [[org.clojure/clojure "1.8.0"]
 
                  ;; logging for core
                  [org.apache.logging.log4j/log4j-core "2.7"]
+                 [org.apache.logging.log4j/log4j-slf4j-impl "2.7"]
+                 [org.apache.logging.log4j/log4j-1.2-api "2.7"]
+                 [org.apache.logging.log4j/log4j-jcl "2.7"]
 
                  ;; json parse
                  [org.clojure/data.json "0.2.6"]
@@ -41,11 +47,5 @@
              :snapshot {:git-version {:version-cmd "echo -snapshot"}}
              :dev
              {:jvm-opts ["-Dlog4j.configurationFile=test-resources/log4j2.xml" "-Xms4g" "-Xmx12g" "-XX:+UseConcMarkSweepGC"]
-              :exclusions [org.slf4j/slf4j-log4j12
-                           log4j/log4j
-                           ch.qos.logback/logback-classic]
-              :dependencies [[org.apache.logging.log4j/log4j-slf4j-impl "2.7"]
-                             [org.apache.logging.log4j/log4j-1.2-api "2.7"]
-                             [org.apache.logging.log4j/log4j-jcl "2.7"]
-                             [com.zensols/clj-append "1.0.5"]]}}
+              :dependencies [[com.zensols/clj-append "1.0.5"]]}}
   :main zensols.erg.core)

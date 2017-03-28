@@ -11,15 +11,19 @@
 
 (def ^:dynamic *default-percent-ftp-ranges*
   "Arary of arrays regular expressions of English sentence ranges."
-  [#"(\d+)\s*(?:to|[\-])\s*(\d+)%"])
+  [#"(\d+)\s*(?:to|[\-])\s*(\d+)%"
+   #"(\d+)%(?uix:ftp)"])
 
 (def ^:dynamic *default-percent-ftp-descriptors*
   "Arary of arrays with each a regular expression of the description, a keyword
   identifier token and a percent to use for FTP."
   [[#"^(?ui)warm\s*up$" :warmup 0.4]
+   [#"^(?ui)cool\s*down$" :sprint 0.3]
    [#"^(?ui)(easy\s*)?recovery?$" :recovery 0.6]
    [#"^(?ui)fast\s*spin$" :fast-spin 0.3]
-   [#"(?ui)spin$" :spin 0.4]])
+   [#"^(?ui)easy\s*spin$" :fast-spin 0.35]
+   [#"^(?ui)spin$" :spin 0.4]
+   [#"^(?ui)sprint$" :sprint 0.9]])
 
 (def ^:dynamic *linear-interpolate-ftp-zone* 4.5)
 
@@ -38,7 +42,8 @@
   (->> *default-percent-ftp-ranges*
        (some (fn [pat]
                (let [[_ st en] (re-find pat s)]
-                 (if st (map read-string [st en])))))))
+                 (cond (and st en) (map read-string [st en])
+                       st (map read-string [st st])))))))
 
 (defn- description-to-ftp-descriptor
   "Guess the percent FTP by the description.  This is given by "
@@ -47,7 +52,11 @@
        (some (fn [[pat desc percent]]
                (if (re-find pat s)
                  {:descriptor desc
-                  :percent percent})))))
+                  :percent percent})))
+       ((fn [data]
+          (or data (-> (format "No known descriptor for: <%s>" s)
+                       (ex-info {:descriptor s})
+                       throw))))))
 
 (defn- zone-to-percent
   "Convert from an FTP zone to an FTP percent.  **desc** is the description of
@@ -70,6 +79,7 @@
   "Create power sets used in the ERG.  **ftp** is the athlete's FTP and
   **ppdata** is parsed by [[parse-ppsmrx]]."
   [ftp ppdata]
+  (log/debugf "computing power sets on ftp=%d" ftp)
   (let [{:keys [fields sets]} ppdata
         fields (map keyword fields)]
     (->> sets
