@@ -18,6 +18,3 @@
   (cli/set-program-name "pp2erg")
   (-> (create-action-context)
       (cli/process-arguments args)))
-
-(binding [cli/*dump-jvm-on-error* false]
-  (-main "-f" "244" "-e" "-p" "/d/3x10 power hill intervals.ppsmrx" ))
