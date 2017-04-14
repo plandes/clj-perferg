@@ -11,8 +11,12 @@
 
 (def ^:dynamic *default-percent-ftp-ranges*
   "Arary of arrays regular expressions of English sentence ranges."
-  [#"(\d+)\s*(?:to|[\-])\s*(\d+)%"
+  [#"(\d+)%?\s*(?:to|[\-])\s*(\d+)%"
    #"(\d+)%(?uix:ftp)"])
+
+;; TODO: add tests for regexs
+;; (re-find #"(\d+)%?\s*(?:to|[\-])\s*(\d+)%" "92% to 97%")
+;; (re-find #"(\d+)%?\s*(?:to|[\-])\s*(\d+)%" "92 to 97%")
 
 (def ^:dynamic *default-percent-ftp-descriptors*
   "Arary of arrays with each a regular expression of the description, a keyword
@@ -23,7 +27,8 @@
    [#"^(?ui)fast\s*spin$" :fast-spin 0.3]
    [#"^(?ui)easy\s*spin$" :fast-spin 0.35]
    [#"^(?ui)spin$" :spin 0.4]
-   [#"^(?ui)sprint$" :sprint 0.9]])
+   [#"^(?ui)sprint$" :sprint 0.9]
+   [#"^(\d+)\s+(?ui)rpm$" :unknown 0.8]])
 
 (def ^:dynamic *linear-interpolate-ftp-zone* 4.5)
 
@@ -42,8 +47,8 @@
   (->> *default-percent-ftp-ranges*
        (some (fn [pat]
                (let [[_ st en] (re-find pat s)]
-                 (cond (and st en) (map read-string [st en])
-                       st (map read-string [st st])))))))
+                 (cond (and st en) (map #(Double/parseDouble %) [st en])
+                       st (map #(Double/parseDouble %) [st st])))))))
 
 (defn- description-to-ftp-descriptor
   "Guess the percent FTP by the description.  This is given by "
@@ -62,24 +67,29 @@
   "Convert from an FTP zone to an FTP percent.  **desc** is the description of
   the interval and num is the `start` field."
   [desc num]
-  (log/debugf "zone to percent: %s, %d" desc num)
+  (log/debugf "zone to percent: %s, %s" desc num)
   (if-let [ftp-range (description-to-ftp-range desc)]
     (let [high (apply max ftp-range)
           low (apply min ftp-range)]
       (/ (+ (/ (- high low) 2.0) low) 100.0))
-    (let [fdesc (description-to-ftp-descriptor desc)]
-      (if (and (< 0 num) (> 7 num))
-        (/ num *linear-interpolate-ftp-zone*)
-        (or (-> fdesc :percent)
-            (-> (format "Don't know how to convert percent '%s' of %d" desc num)
-                (ex-info {:desc desc :num num})
-                throw))))))
+    (if (and (< 0 num) (> 7 num))
+      (/ num *linear-interpolate-ftp-zone*)
+      (or (-> (description-to-ftp-descriptor desc) :percent)
+          (-> (format "Don't know how to convert percent '%s' of %d" desc num)
+              (ex-info {:desc desc :num num})
+              throw)))))
+
+(defn- format-time [seconds]
+  (let [minutes (/ (double seconds) 60.0)]
+    (format "%2d:%02d"
+            (int (Math/floor minutes))
+            (int (mod seconds 60)))))
 
 (defn- power-sets
   "Create power sets used in the ERG.  **ftp** is the athlete's FTP and
   **ppdata** is parsed by [[parse-ppsmrx]]."
   [ftp ppdata]
-  (log/debugf "computing power sets on ftp=%d" ftp)
+  (log/debugf "computing power sets on ftp=%f" ftp)
   (let [{:keys [fields sets]} ppdata
         fields (map keyword fields)]
     (->> sets
@@ -87,9 +97,11 @@
                 (zipmap fields row)))
          (map (fn [{:keys [start seconds description mode targetcad] :as m}]
                 (when (> (-> description s/trim count) 0)
-                  (log/debugf "[%d, %d]: <%s>, m=%s, tc=%d"
+                  (log/debugf "[%s, %s]: <%s>, m=%s, tc=%s"
                               start seconds description mode targetcad)
                   (let [minutes (/ (double seconds) 60.0)
+                        time-desc (format-time seconds)
+                        ;; bad name
                         percent (if (= mode "M")
                                   (-> (description-to-ftp-descriptor description)
                                       :percent)
@@ -97,11 +109,22 @@
                         watts (* percent ftp)]
                     {:description description
                      :cadence targetcad
+                     :time time-desc
                      :seconds seconds
                      :minutes minutes
-                     :percent percent
+                     :percent (* 100 percent)
                      :watts watts}))))
-         (remove nil?))))
+         (remove nil?)
+         (reduce (fn [{:keys [rowid] :as res} {:keys [seconds] :as m}]
+                   (let [st (+ (:start res) seconds)]
+                    {:lst (conj (:lst res)
+                                (assoc m :start st :rowid rowid))
+                     :start st
+                     :rowid (+ 1 rowid)}))
+                 {:lst []
+                  :start 0
+                  :rowid 0})
+         :lst)))
 
 (defn- save-power-sets
   "Save an Excel file using power sets (**sets**).  **fields** are the keys
@@ -120,7 +143,7 @@
 (defn- save-as-excel
   "Massage data and save with [[save-power-sets]]."
   [ppdata power-sets out-file]
-  (let [fields [:description :minutes :percent :watts :cadence]]
+  (let [fields [:description :time :start :rowid :percent :watts :cadence]]
     (->> power-sets
          (map (fn [row]
                 (map #(get row %) fields)))
@@ -132,8 +155,8 @@
   [power-sets]
   (->> power-sets
        (reduce (fn [{:keys [rows time description]} {:keys [minutes watts]}]
-                 (let [start time
-                       end (+ time minutes)
+                 (let [start (double time)
+                       end (double (+ time minutes))
                        mmap {:watts watts
                              :description description}]
                    {:time end
@@ -168,7 +191,15 @@ MINUTES WATTS
                 (format "%.2f\t%d" (double time) (int watts))))
          (map println)
          doall)
-    (println "[END COURSE DATA]")))
+    (println "[END COURSE DATA]\n\n[PERFPRO DESCRIPTIONS]")
+    (->> power-sets
+         (map (fn [{:keys [rowid description cadence] :as m}]
+                (println (format "Desc%d=%s (%d rpm)"
+                                 rowid description cadence))))
+         doall)
+    (println "[END PERFPRO DESCRIPTIONS]\n\n[PERFPRO COMMENTS]")
+    (println (str "Comments=" (:comments ppdata)))
+    (println "[END PERFPRO COMMENTS]")))
 
 (defn- file-to-name
   "Get the name portion of a file."
@@ -210,11 +241,11 @@ MINUTES WATTS
     ["-e" "--excel" "If provided output an Excel summary file as well"]
     ["-f" "--ftp" "The functional threshold power"
      :required "<number>"
-     :parse-fn read-string
+     :parse-fn #(Double/parseDouble %)
      :validate [#(> % 50) "Must be a positive number above 50"]]
     ["-i" "--interpolate" "zone to percent FTP interplation constant"
      :required "<number>"
-     :parse-fn read-string
+     :parse-fn #(Double/parseDouble %)
      :default *linear-interpolate-ftp-zone*
      :validate [#(> % 1) "Must be a positive number above 1"]]]
    :app (fn [{:keys [perfpro ftp interpolate excel] :as opts} & args]
